@@ -1,12 +1,12 @@
 """
 Product service - manages product catalog
 """
-import datetime
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Depends
 import redis
-from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from pydantic import BaseModel, Field, ConfigDict
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, text
 from sqlalchemy.orm import sessionmaker, Session
 import logging
 import os
@@ -37,7 +37,7 @@ class ProductDB(Base):
     description = Column(String)
     price = Column(Float)
     stock = Column(Integer)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
@@ -52,8 +52,7 @@ class Product(ProductCreate):
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 app = FastAPI(title="Product Service", version="1.0.0")
 
@@ -73,9 +72,9 @@ async def startup_event():
 async def health(db: Session = Depends(get_db)):
     try:
         #  check database connection
-        db.execute("SELLECT 1")
+        db.execute(text("SELECT 1"))
         # check redis connection
-        redis.client.ping()
+        redis_client.ping()
         return {
             "status": "healthy",
             "service": "product-service",
@@ -101,7 +100,7 @@ async def get_products(skip: int = 0, limit: int = 0, db: Session = Depends(get_
     result = [Product.model_validate(p) for p in products]
 
     # Cache for 5 minutes
-    redis.client.setex(cache_key, 300, json.dumps([p.model_dump(mode='json') for p in result]))
+    redis_client.setex(cache_key, 300, json.dumps([p.model_dump(mode='json') for p in result]))
 
     return result
 
@@ -136,7 +135,7 @@ async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
     db.refresh(db_product)
 
     #  Invalidate cache
-    redis.client.delete("products:*")
+    redis_client.delete("products:*")
 
     logger.info(f"Product created with ID: {db_product.id}")
     return product.model_validate(db_product)
@@ -180,4 +179,4 @@ async def delete_product(product_id: int, db: Session = Depends(get_db)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
