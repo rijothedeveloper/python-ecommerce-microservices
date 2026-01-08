@@ -58,6 +58,30 @@ services:
     networks:
       - microservices
 
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    environment:
+      PRODUCT_SERVICE_URL: http://product-service:8001
+      ORDER_SERVICE_URL: http://order-service:8002
+    ports:
+      - "8000:8000"
+    depends_on:
+      product-service:
+        condition: service_healthy
+#      order-service:
+#        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - microservices
+
 volumes:
   postgres_data:
 #  prometheus_data:
